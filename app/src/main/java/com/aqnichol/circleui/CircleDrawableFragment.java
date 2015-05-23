@@ -24,10 +24,9 @@ public class CircleDrawableFragment extends CircleFragment {
             return;
         }
 
-        // If the circle has a radius of 1, the inscribed square has a radius of 1/sqrt(2).
-        int inset = Math.round((float)bounds.width() * (1.0f - 1.0f/(float)Math.sqrt(2.0f)) / 2);
-
+        int inset = bounds.width() / 4;
         bounds.inset(inset, inset);
+
         drawable.setBounds(bounds);
         drawable.setAlpha(Math.round(alpha * 255.0f));
         drawable.draw(canvas);

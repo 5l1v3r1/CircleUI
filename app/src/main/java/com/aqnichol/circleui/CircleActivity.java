@@ -206,6 +206,7 @@ public class CircleActivity extends Activity {
         private final float PHASE2_DURATION = 0.3f;
         private final float ANGLE_FACTOR = 0.2f;
         private final float ANGLE_OFFSET = 0.3f;
+        private final float FORWARD_ANGLE_OFFSET = 0.7f;
 
         public PageLayout phase1Start;
         public PageLayout phase1End;
@@ -221,7 +222,7 @@ public class CircleActivity extends Activity {
                     endLayouts[i] = x.radius(0);
                 } else {
                     if (forwards) {
-                        endLayouts[i] = x.rotate(x.angle * (1.0f + ANGLE_FACTOR) + ANGLE_OFFSET)
+                        endLayouts[i] = x.rotate(x.angle + FORWARD_ANGLE_OFFSET)
                                 .alpha(0);
                     } else {
                         endLayouts[i] = x.rotate(x.angle * (1.0f - ANGLE_FACTOR) - ANGLE_OFFSET)
@@ -287,6 +288,7 @@ public class CircleActivity extends Activity {
         private Paint backgroundPaint = new Paint();
 
         private CircleFragment highlighted = null;
+        private CircleFragment root = null;
         private CircleFragment currentFragment = null;
 
         public CirclesView(Context context) {
@@ -299,12 +301,16 @@ public class CircleActivity extends Activity {
         public void goToNextPage(CircleFragment f) {
             if (currentFragment == null) {
                 push(new UnchangingChangeableLayouts(f));
+                currentFragment = f;
+                root = f;
             } else {
                 push(new SpinTransition(currentFragment, f, true));
+                currentFragment = f;
+                getFragmentManager().beginTransaction()
+                        .add(f, null)
+                        .addToBackStack(f.getUniqueName())
+                        .commit();
             }
-            currentFragment = f;
-            getFragmentManager().beginTransaction().add(f, null).addToBackStack(f.getUniqueName())
-                    .commit();
         }
 
         @Override
@@ -372,14 +378,14 @@ public class CircleActivity extends Activity {
 
         @Override
         public void onBackStackChanged() {
+            CircleFragment f = root;
             int count = getFragmentManager().getBackStackEntryCount();
-            if (count == 0) {
-                return;
-            }
-            String name = getFragmentManager().getBackStackEntryAt(count - 1).getName();
-            CircleFragment f = uniqueIdToFragment.get(name);
-            if (f == null) {
-                return;
+            if (count > 0) {
+                String name = getFragmentManager().getBackStackEntryAt(count - 1).getName();
+                f = uniqueIdToFragment.get(name);
+                if (BuildConfig.DEBUG && f == null) {
+                    throw new AssertionError();
+                }
             }
             if (currentFragment == f) {
                 return;

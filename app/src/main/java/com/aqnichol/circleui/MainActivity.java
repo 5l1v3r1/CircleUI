@@ -29,7 +29,7 @@ public class MainActivity extends CircleActivity {
         f4.setDrawable(getDrawable(R.drawable.flaticon4));
 
         CircleDrawableFragment f5 = new CircleDrawableFragment();
-        f5.setBackgroundColor(Color.rgb(0x81, 0xad, 0x2a));
+        f5.setBackgroundColor(Color.rgb(0x80, 0x49, 0x3a));
         f5.setDrawable(getDrawable(R.drawable.flaticon5));
 
         mainCircle.setMenuOptions(new CircleFragment[]{f1, f2, f3, f4, f5});
