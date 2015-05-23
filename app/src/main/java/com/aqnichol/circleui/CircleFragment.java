@@ -2,14 +2,18 @@ package com.aqnichol.circleui;
 
 import android.app.Fragment;
 import android.graphics.Canvas;
+import android.graphics.Paint;
 import android.graphics.Rect;
 
 /**
  * A CircleFragment represents an option or submenu in a CircleActivity.
  */
-abstract public class CircleFragment extends Fragment {
+public class CircleFragment extends Fragment {
+
+    private Paint paint = new Paint();
 
     public CircleFragment() {
+        paint.setAntiAlias(true);
     }
 
     public boolean isMenu() {
@@ -20,6 +24,16 @@ abstract public class CircleFragment extends Fragment {
         return null;
     }
 
-    abstract public void draw(Canvas canvas, Rect bounds, float alpha);
+    public void draw(Canvas c, Rect b, float alpha) {
+        c.drawCircle(b.exactCenterX(), b.exactCenterY(), (float)b.width() / 2, paint);
+    }
+
+    public int getBackgroundColor() {
+        return paint.getColor();
+    }
+
+    public void setBackgroundColor(int backgroundColor) {
+        paint.setColor(backgroundColor);
+    }
 
 }

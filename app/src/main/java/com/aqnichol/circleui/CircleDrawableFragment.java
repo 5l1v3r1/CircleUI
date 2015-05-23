@@ -17,15 +17,16 @@ import android.view.ViewGroup;
 public class CircleDrawableFragment extends CircleFragment {
 
     private Drawable drawable = null;
-    private Paint paint = new Paint();
 
     public void draw(Canvas canvas, Rect bounds, float alpha) {
-        canvas.drawCircle(bounds.exactCenterX(), bounds.exactCenterY(), (float)bounds.width() / 2,
-                paint);
+        super.draw(canvas, bounds, alpha);
         if (drawable == null) {
             return;
         }
+
+        // If the circle has a radius of 1, the inscribed square has a radius of 1/sqrt(2).
         int inset = Math.round((float)bounds.width() * (1.0f - 1.0f/(float)Math.sqrt(2.0f)) / 2);
+
         bounds.inset(inset, inset);
         drawable.setBounds(bounds);
         drawable.setAlpha(Math.round(alpha * 255.0f));
@@ -38,14 +39,6 @@ public class CircleDrawableFragment extends CircleFragment {
 
     public void setDrawable(Drawable drawable) {
         this.drawable = drawable;
-    }
-
-    public int getBackgroundColor() {
-        return paint.getColor();
-    }
-
-    public void setBackgroundColor(int backgroundColor) {
-        paint.setColor(backgroundColor);
     }
 
 }

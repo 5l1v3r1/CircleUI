@@ -28,206 +28,176 @@ public class CircleActivity extends Activity {
     }
 
     public void showMenu(CircleFragment f) {
-        circlesView.pushTransition(new InstantTransition(f));
+        circlesView.push(new UnchangingChangeableLayouts(f));
     }
 
-    private static CircleDrawInfo[] layoutForFragment(CircleFragment fragment) {
-        int count = 1;
-        if (fragment.isMenu()) {
-            count += fragment.getMenuOptions().length;
-        }
-        CircleDrawInfo[] info = new CircleDrawInfo[count];
-        info[0] = new CircleDrawInfo(fragment, 0, 0, 1);
-        for (int i = 1; i < count; ++i) {
-            float angle = 2 * (float)Math.PI * (float)(i - 1) / (float)(count - 1);
-            info[i] = new CircleDrawInfo(fragment.getMenuOptions()[i - 1], 1, angle, 1);
-        }
-        return info;
-    }
-
-    private static class CirclesView extends View {
-
-        private float CIRCLE_RADIUS_RATIO = 1.0f/8.0f;
-
-        private long transitionStartTime = 0;
-        private Transition transition = null;
-        private ArrayList<Transition> pending = new ArrayList<>();
-        private Rect reuseRect = new Rect();
-
-        public CirclesView(Context context) {
-            super(context);
-        }
-
-        public void pushTransition(Transition t) {
-            if (transition == null || transition.isDone(getProgress())) {
-                transitionStartTime = SystemClock.elapsedRealtime();
-                transition = t;
-                postInvalidateOnAnimation();
-            } else {
-                pending.add(t);
-            }
-        }
-
-        @Override
-        protected void onDraw(Canvas canvas) {
-            if (this.transition == null) {
-                return;
-            }
-
-            float progress = getProgress();
-            CircleDrawInfo infos[] = transition.layoutForProgress(progress);
-
-            Rect contentBounds = this.getContentBounds();
-
-            float circleRadius = (float)contentBounds.width() * CIRCLE_RADIUS_RATIO;
-            float distScale = ((float)contentBounds.width() / 2) - circleRadius;
-            int circleSize = Math.round(circleRadius * 2);
-            for (CircleDrawInfo info : infos) {
-                float circleCenterX = contentBounds.exactCenterX() + ((float)Math.cos(info.angle) *
-                        distScale * info.radialDistance);
-                float circleCenterY = contentBounds.exactCenterY() + ((float)Math.sin(info.angle) *
-                        distScale * info.radialDistance);
-                int x = Math.round(circleCenterX - circleRadius);
-                int y = Math.round(circleCenterY - circleRadius);
-                reuseRect.set(x, y, x + circleSize, y + circleSize);
-                info.circle.draw(canvas, reuseRect, info.alpha);
-            }
-
-            if (!transition.isDone(progress)) {
-                postInvalidateOnAnimation();
-            } else if (pending.size() > 0) {
-                Transition t = pending.get(0);
-                pending.remove(0);
-                this.pushTransition(t);
-            }
-        }
-
-        private Rect getContentBounds() {
-            if (this.getWidth() < this.getHeight()) {
-                float top = (float)(this.getHeight() - this.getWidth()) / 2;
-                return new Rect(0, Math.round(top), this.getWidth(),
-                        this.getWidth() + Math.round(top));
-            } else {
-                float left = (float)(this.getWidth() - this.getHeight()) / 2;
-                return new Rect(Math.round(left), 0, Math.round(left) + this.getHeight(),
-                        this.getHeight());
-            }
-        }
-
-        private float getProgress() {
-            long duration = SystemClock.elapsedRealtime() - transitionStartTime;
-            return (float)duration / 1000.0f;
-        }
-
-    }
-
-    private static class CircleDrawInfo {
+    private static class CircleLayout {
 
         public CircleFragment circle;
-        public float radialDistance;
+        public float radius;
         public float angle;
         public float alpha;
 
-        public CircleDrawInfo(CircleFragment circle, float radialDistance, float angle,
-                              float alpha) {
+        public CircleLayout(CircleLayout x) {
+            this.circle = x.circle;
+            this.radius = x.radius;
+            this.angle = x.angle;
+            this.alpha = x.alpha;
+        }
+
+        public CircleLayout(CircleFragment circle, float radius, float angle, float alpha) {
             this.circle = circle;
-            this.radialDistance = radialDistance;
+            this.radius = radius;
             this.angle = angle;
             this.alpha = alpha;
         }
 
-        public CircleDrawInfo changeAlpha(float newAlpha) {
-            return new CircleDrawInfo(circle, radialDistance, angle, newAlpha);
+        public CircleLayout alpha(float newAlpha) {
+            return new CircleLayout(circle, radius, angle, newAlpha);
         }
 
-        public CircleDrawInfo rotate(float radians) {
-            return new CircleDrawInfo(circle, radialDistance, angle + radians, alpha);
+        public CircleLayout radius(float newRadius) {
+            return new CircleLayout(circle, newRadius, angle, alpha);
         }
 
-        public CircleDrawInfo clone() {
-            return new CircleDrawInfo(circle, radialDistance, angle, alpha);
+        public CircleLayout rotate(float addAngle) {
+            return new CircleLayout(circle, radius, angle + addAngle, alpha);
         }
 
-        public static CircleDrawInfo intermediate(CircleDrawInfo i1, CircleDrawInfo i2, float p) {
-            return new CircleDrawInfo(i1.circle, i1.radialDistance + (i2.radialDistance -
-                    i1.radialDistance) * p, i1.angle + (i2.angle - i1.angle) * p,
-                    i1.alpha + (i2.alpha - i1.alpha) * p);
-        }
+    }
 
-        public static CircleDrawInfo[] intermediateList(CircleDrawInfo[] l1, CircleDrawInfo[] l2,
-                                                        float p) {
-            CircleDrawInfo[] result = new CircleDrawInfo[l1.length];
-            for (int i = 0; i < l1.length; ++i) {
-                result[i] = intermediate(l1[i], l2[i], p);
+    private static class PageLayout {
+
+        private CircleLayout[] circleLayouts;
+
+        public PageLayout(CircleFragment root) {
+            assert root.isMenu();
+            CircleFragment[] options = root.getMenuOptions();
+            int count = 1 + options.length;
+            circleLayouts = new CircleLayout[count];
+            circleLayouts[0] = new CircleLayout(root, 0, 0, 1);
+            for (int i = 1; i < count; ++i) {
+                float angle = 2 * (float)Math.PI * (float)(i - 1) / (float)(count - 1);
+                circleLayouts[i] = new CircleLayout(options[i - 1], 1, angle, 1);
             }
-            return result;
+        }
+
+        public PageLayout(CircleLayout[] layouts) {
+            circleLayouts = layouts;
+        }
+
+        public int getCircleCount() {
+            return circleLayouts.length;
+        }
+
+        public CircleLayout[] getCircleLayouts() {
+            return circleLayouts;
+        }
+
+        public static PageLayout intermediate(PageLayout start, PageLayout end, float progress) {
+            assert start.circleLayouts.length == end.circleLayouts.length;
+            CircleLayout[] layouts = new CircleLayout[start.circleLayouts.length];
+            for (int i = 0; i < start.circleLayouts.length; ++i) {
+                CircleLayout l1 = start.circleLayouts[i];
+                CircleLayout l2 = end.circleLayouts[i];
+                assert l1.circle == l2.circle;
+                layouts[i] = new CircleLayout(l1.circle, intermediateFloat(l1.radius, l2.radius,
+                        progress), intermediateFloat(l1.angle, l2.angle, progress),
+                        intermediateFloat(l1.alpha, l2.alpha, progress));
+            }
+            return new PageLayout(layouts);
+        }
+
+        private static float intermediateFloat(float f1, float f2, float progress) {
+            return f1 + (f2 - f1) * progress;
         }
 
     }
 
-    private interface Transition {
+    private interface ChangeablePage {
 
-        boolean isDone(float progress);
-        CircleDrawInfo[] layoutForProgress(float progress);
+        boolean isDoneChanging();
+        PageLayout currentFrame();
 
     }
 
-    private static class InstantTransition implements Transition {
+    private static class UnchangingChangeableLayouts implements ChangeablePage {
 
-        private CircleDrawInfo[] info;
+        private PageLayout layout;
 
-        public InstantTransition(CircleFragment f) {
-            info = layoutForFragment(f);
+        public UnchangingChangeableLayouts(CircleFragment menu) {
+            layout = new PageLayout(menu);
         }
 
-        public boolean isDone(float progress) {
+        @Override
+        public boolean isDoneChanging() {
             return true;
         }
 
-        public CircleDrawInfo[] layoutForProgress(float progress) {
-            return info;
+        @Override
+        public PageLayout currentFrame() {
+            return layout;
         }
 
     }
 
-    private static class ForwardTransition implements Transition {
+    abstract private static class Transition implements ChangeablePage {
+
+        private long start;
+
+        public Transition() {
+            start = SystemClock.elapsedRealtime();
+        }
+
+        protected float getSecondsElapsed() {
+            return (float)(SystemClock.elapsedRealtime() - start) / 1000.0f;
+        }
+
+    }
+
+    private static class ForwardTransition extends Transition {
 
         private final float PHASE1_DURATION = 0.3f;
         private final float PHASE2_DURATION = 0.3f;
 
-        public CircleDrawInfo[] phase1Start;
-        public CircleDrawInfo[] phase1End;
-        public CircleDrawInfo[] phase2Start;
-        public CircleDrawInfo[] phase2End;
+        public PageLayout phase1Start;
+        public PageLayout phase1End;
+        public PageLayout phase2Start;
+        public PageLayout phase2End;
 
         public ForwardTransition(CircleFragment start, CircleFragment end) {
-            phase1Start = layoutForFragment(start);
-            phase1End = new CircleDrawInfo[phase1Start.length];
-            for (int i = 0; i < phase1Start.length; ++i) {
-                if (phase1Start[i].circle == end) {
-                    phase1End[i] = phase1Start[i].clone();
-                    phase1End[i].radialDistance = 0;
+            phase1Start = new PageLayout(start);
+            CircleLayout[] endLayouts = new CircleLayout[phase1Start.getCircleCount()];
+            for (int i = 0; i < endLayouts.length; ++i) {
+                CircleLayout x = phase1Start.getCircleLayouts()[i];
+                if (x.circle == end) {
+                    endLayouts[i] = x.radius(0);
                 } else {
-                    phase1End[i] = phase1Start[i].rotate((float)Math.PI).changeAlpha(0);
-                    phase1End[i].alpha = 0;
+                    endLayouts[i] = x.rotate((float)Math.PI).alpha(0);
                 }
             }
+            phase1End = new PageLayout(endLayouts);
 
-            phase2End = layoutForFragment(end);
-            phase2Start = new CircleDrawInfo[phase2End.length];
-            for (int i = 0; i < phase2End.length; ++i) {
-                if (phase2End[i].circle == end) {
-                    continue;
+            phase2End = new PageLayout(end);
+            CircleLayout[] startLayouts = new CircleLayout[phase2End.getCircleCount()];
+            for (int i = 0; i < startLayouts.length; ++i) {
+                CircleLayout x = phase2End.getCircleLayouts()[i];
+                if (x.circle == end) {
+                    startLayouts[i] = x;
+                } else {
+                    startLayouts[i] = x.rotate((float)Math.PI).alpha(0);
                 }
-                phase2Start[i] = phase2End[i].rotate((float)Math.PI).changeAlpha(0);
             }
+            phase2Start = new PageLayout(startLayouts);
         }
 
-        public boolean isDone(float progress) {
-            return progress >= PHASE1_DURATION + PHASE2_DURATION;
+        public boolean isDoneChanging() {
+            return getSecondsElapsed() >= PHASE1_DURATION + PHASE2_DURATION;
         }
 
-        public CircleDrawInfo[] layoutForProgress(float progress) {
+        public PageLayout currentFrame() {
+            float progress = getSecondsElapsed();
+
             if (progress >= PHASE1_DURATION + PHASE2_DURATION) {
                 return phase2End;
             } else if (progress <= 0) {
@@ -235,12 +205,92 @@ public class CircleActivity extends Activity {
             }
 
             if (progress <= PHASE1_DURATION) {
-                return CircleDrawInfo.intermediateList(phase1Start, phase1End, progress /
+                return PageLayout.intermediate(phase1Start, phase1End, progress /
                         PHASE1_DURATION);
             } else {
-                return CircleDrawInfo.intermediateList(phase2Start, phase2End, (progress -
+                return PageLayout.intermediate(phase2Start, phase2End, (progress -
                         PHASE1_DURATION) / PHASE2_DURATION);
             }
+        }
+
+    }
+
+    private static class CirclesView extends View {
+
+        private final float RELATIVE_CIRCLE_RADIUS = 1.0f/8.0f;
+        private final float MARGIN = 10.0f;
+
+        private ChangeablePage page = null;
+        private ArrayList<ChangeablePage> pending = new ArrayList<>();
+        private Rect reuseRect = new Rect();
+
+        public CirclesView(Context context) {
+            super(context);
+        }
+
+        public void push(ChangeablePage p) {
+            if (page == null || page.isDoneChanging()) {
+                page = p;
+                postInvalidateOnAnimation();
+            } else {
+                pending.add(p);
+            }
+        }
+
+        @Override
+        protected void onDraw(Canvas canvas) {
+            if (page == null) {
+                return;
+            }
+
+            PageLayout pageLayout = page.currentFrame();
+            Rect bounds = this.getContentBounds();
+
+            float radius = (float)bounds.width() * RELATIVE_CIRCLE_RADIUS;
+            float coordinateScale = ((float)bounds.width() / 2) - radius;
+            int diameter = Math.round(radius * 2);
+
+            for (CircleLayout layout : pageLayout.getCircleLayouts()) {
+                float x = bounds.exactCenterX() + ((float)Math.cos(layout.angle) *
+                        coordinateScale * layout.radius);
+                float y = bounds.exactCenterY() + ((float)Math.sin(layout.angle) *
+                        coordinateScale * layout.radius);
+                int boundsX = Math.round(x - radius);
+                int boundsY = Math.round(y - radius);
+                reuseRect.set(boundsX, boundsY, boundsX + diameter, boundsY + diameter);
+                layout.circle.draw(canvas, reuseRect, layout.alpha);
+            }
+
+            if (!page.isDoneChanging()) {
+                postInvalidateOnAnimation();
+            } else if (pending.size() > 0) {
+                ChangeablePage t = pending.get(0);
+                pending.remove(0);
+                this.push(t);
+            }
+        }
+
+        private Rect getContentBounds() {
+            float margin = getResources().getDisplayMetrics().density * MARGIN;
+
+            float top = margin;
+            float bottom = (float)this.getHeight() - margin;
+            float left = margin;
+            float right = (float)this.getWidth() - margin;
+
+            float sizeDiff = Math.abs((right - left) - (bottom - top)) / 2;
+
+            if ((right - left) > (bottom - top)) {
+                right -= sizeDiff;
+                left += sizeDiff;
+            } else {
+                top += sizeDiff;
+            }
+
+            int size = Math.round(right - left);
+            int x = Math.round(left);
+            int y = Math.round(top);
+            return new Rect(x, y, x + size, y + size);
         }
 
     }
