@@ -10,6 +10,7 @@ import android.graphics.Rect;
 import android.os.Bundle;
 import android.os.SystemClock;
 import android.support.annotation.Nullable;
+import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
@@ -28,15 +29,30 @@ public class CircleActivity extends Activity {
     private OnChooseListener onChooseListener;
     private Map<String, CircleFragment> uniqueIdToFragment;
 
+    @Override
     public void onCreate(Bundle b) {
         super.onCreate(b);
         ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         circlesView = new CirclesView(this);
         setContentView(circlesView, params);
+        getFragmentManager().addOnBackStackChangedListener(circlesView);
+
+        if (hasMenu()) {
+            findFragments((CircleFragment)getFragmentManager().findFragmentByTag("root"));
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        getFragmentManager().removeOnBackStackChangedListener(circlesView);
     }
 
     public void showMenu(CircleFragment f) {
+        if (hasMenu()) {
+            return;
+        }
         findFragments(f);
         circlesView.goToNextPage(f);
     }
@@ -47,6 +63,10 @@ public class CircleActivity extends Activity {
 
     public void setOnChooseListener(OnChooseListener onChooseListener) {
         this.onChooseListener = onChooseListener;
+    }
+
+    public boolean hasMenu() {
+        return getFragmentManager().getBackStackEntryCount() > 0;
     }
 
     private void findFragments(CircleFragment f) {
@@ -288,24 +308,28 @@ public class CircleActivity extends Activity {
         private Paint backgroundPaint = new Paint();
 
         private CircleFragment highlighted = null;
-        private CircleFragment root = null;
-        private CircleFragment currentFragment = null;
+        private CircleFragment lastFragment = null;
 
         public CirclesView(Context context) {
             super(context);
             backgroundPaint.setColor(Color.BLACK);
             this.setOnTouchListener(this);
-            getFragmentManager().addOnBackStackChangedListener(this);
+
+            lastFragment = getCurrentFragment();
+            if (lastFragment != null) {
+                push(new UnchangingChangeableLayouts(lastFragment));
+            }
         }
 
         public void goToNextPage(CircleFragment f) {
-            if (currentFragment == null) {
+            lastFragment = f;
+            if (getCurrentFragment() == null) {
                 push(new UnchangingChangeableLayouts(f));
-                currentFragment = f;
-                root = f;
+                getFragmentManager().beginTransaction()
+                        .add(f, "root")
+                        .commit();
             } else {
-                push(new SpinTransition(currentFragment, f, true));
-                currentFragment = f;
+                push(new SpinTransition(getCurrentFragment(), f, true));
                 getFragmentManager().beginTransaction()
                         .add(f, null)
                         .addToBackStack(f.getUniqueName())
@@ -378,28 +402,16 @@ public class CircleActivity extends Activity {
 
         @Override
         public void onBackStackChanged() {
-            CircleFragment f = root;
-            int count = getFragmentManager().getBackStackEntryCount();
-            if (count > 0) {
-                String name = getFragmentManager().getBackStackEntryAt(count - 1).getName();
-                f = uniqueIdToFragment.get(name);
-                if (BuildConfig.DEBUG && f == null) {
-                    throw new AssertionError();
-                }
-            }
-            if (currentFragment == f) {
+            CircleFragment f = getCurrentFragment();
+            if (f == lastFragment) {
                 return;
-            } else {
-                push(new SpinTransition(currentFragment, f, false));
             }
-            currentFragment = f;
+            push(new SpinTransition(lastFragment, f, false));
+            lastFragment = f;
         }
 
         private void push(ChangeablePage p) {
             if (page == null || page.isDoneChanging()) {
-                if (currentFragment == null) {
-                    currentFragment = p.currentFrame().getMain().circle;
-                }
                 highlighted = null;
                 page = p;
                 postInvalidateOnAnimation();
@@ -456,6 +468,16 @@ public class CircleActivity extends Activity {
                 }
             }
             return null;
+        }
+
+        private CircleFragment getCurrentFragment() {
+            int count = getFragmentManager().getBackStackEntryCount();
+            if (count > 0) {
+                String name = getFragmentManager().getBackStackEntryAt(count - 1).getName();
+                return uniqueIdToFragment.get(name);
+            } else {
+                return (CircleFragment)getFragmentManager().findFragmentByTag("root");
+            }
         }
 
     }
