@@ -1,6 +1,7 @@
 package com.aqnichol.circleui;
 
 import android.app.Activity;
+import android.app.Fragment;
 import android.app.FragmentManager;
 import android.content.Context;
 import android.graphics.Canvas;
@@ -34,13 +35,19 @@ public class CircleActivity extends Activity {
         super.onCreate(b);
         ViewGroup.LayoutParams params = new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+
+        // Remove all the old state.
+        getFragmentManager().popBackStack(null, FragmentManager.POP_BACK_STACK_INCLUSIVE);
+        Fragment root = getFragmentManager().findFragmentByTag("root");
+        if (root != null) {
+            getFragmentManager().beginTransaction().remove(root).commit();
+        }
+        getFragmentManager().executePendingTransactions();
+
         circlesView = new CirclesView(this);
         setContentView(circlesView, params);
-        getFragmentManager().addOnBackStackChangedListener(circlesView);
 
-        if (hasMenu()) {
-            findFragments((CircleFragment)getFragmentManager().findFragmentByTag("root"));
-        }
+        getFragmentManager().addOnBackStackChangedListener(circlesView);
     }
 
     @Override
@@ -50,9 +57,6 @@ public class CircleActivity extends Activity {
     }
 
     public void showMenu(CircleFragment f) {
-        if (hasMenu()) {
-            return;
-        }
         findFragments(f);
         circlesView.goToNextPage(f);
     }
@@ -63,10 +67,6 @@ public class CircleActivity extends Activity {
 
     public void setOnChooseListener(OnChooseListener onChooseListener) {
         this.onChooseListener = onChooseListener;
-    }
-
-    public boolean hasMenu() {
-        return getFragmentManager().getBackStackEntryCount() > 0;
     }
 
     private void findFragments(CircleFragment f) {
